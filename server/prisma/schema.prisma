@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String            @id @default(cuid())
+  name          String
+  email         String            @unique
+  enrollment    String?           @unique
+  passwordHash  String
+  role          String            @default("STUDENT")
+  contribution  Int               @default(0)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  reports       ItemReport[]
+  claims        OwnershipClaim[]
+  notifications Notification[]
+  handovers     Handover[]
+  contributions UserContribution[]
+}
+
+model ItemReport {
+  id                 String                @id @default(cuid())
+  reportCode         String                @unique
+  type                String
+  title               String
+  category            String
+  description         String
+  color               String
+  brand               String?
+  eventDate           DateTime
+  eventTime           String?
+  locationName        String
+  campusLocationId    String?
+  privateVerification String?
+  custodyStatus       String?
+  status              String                @default("REPORTED")
+  fingerprint         String
+  duplicateFlag       Boolean               @default(false)
+  userId              String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campusLocation      CampusLocation?       @relation(fields: [campusLocationId], references: [id], onDelete: SetNull)
+  images              ItemImage[]
+  matchesAsLost       Match[]               @relation("LostReport")
+  matchesAsFound      Match[]               @relation("FoundReport")
+  lostClaims          OwnershipClaim[]      @relation("ClaimLostReport")
+  foundClaims         OwnershipClaim[]      @relation("ClaimFoundReport")
+  history             ReportStatusHistory[]
+  disputes            Dispute[]
+
+  @@index([type, status])
+  @@index([category, color])
+  @@index([userId, createdAt])
+}
+
+model ItemImage {
+  id        String     @id @default(cuid())
+  path      String
+  mimeType  String
+  reportId  String
+  createdAt DateTime   @default(now())
+  report    ItemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+model Match {
+  id            String     @id @default(cuid())
+  score         Int
+  characteristics String
+  lostReportId  String
+  foundReportId String
+  createdAt     DateTime   @default(now())
+  lostReport    ItemReport @relation("LostReport", fields: [lostReportId], references: [id], onDelete: Cascade)
+  foundReport   ItemReport @relation("FoundReport", fields: [foundReportId], references: [id], onDelete: Cascade)
+
+  @@unique([lostReportId, foundReportId])
+  @@index([score])
+}
+
+model OwnershipClaim {
+  id            String               @id @default(cuid())
+  status        String               @default("PENDING_VERIFICATION")
+  answersPassed Boolean
+  claimantId    String
+  lostReportId  String
+  foundReportId String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  claimant      User                 @relation(fields: [claimantId], references: [id], onDelete: Cascade)
+  lostReport    ItemReport           @relation("ClaimLostReport", fields: [lostReportId], references: [id], onDelete: Cascade)
+  foundReport   ItemReport           @relation("ClaimFoundReport", fields: [foundReportId], references: [id], onDelete: Cascade)
+  attempts      VerificationAttempt[]
+  handover      Handover?
+  disputes      Dispute[]
+
+  @@index([status, createdAt])
+}
+
+model VerificationAttempt {
+  id        String        @id @default(cuid())
+  passed    Boolean
+  claimId   String
+  createdAt DateTime      @default(now())
+  claim     OwnershipClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+}
+
+model Handover {
+  id        String        @id @default(cuid())
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  claimId   String        @unique
+  createdBy String
+  createdAt DateTime      @default(now())
+  claim     OwnershipClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  message   String
+  type      String
+  readAt    DateTime?
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model ReportStatusHistory {
+  id        String     @id @default(cuid())
+  status    String
+  note      String?
+  reportId  String
+  createdAt DateTime   @default(now())
+  report    ItemReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+model CampusLocation {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  reports   ItemReport[]
+}
+
+model UserContribution {
+  id        String   @id @default(cuid())
+  points    Int
+  reason    String
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Dispute {
+  id        String        @id @default(cuid())
+  reason    String
+  status    String        @default("OPEN")
+  claimId   String
+  reportId  String
+  createdAt DateTime      @default(now())
+  claim     OwnershipClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  report    ItemReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
